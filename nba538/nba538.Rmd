@@ -1,0 +1,195 @@
+</br>
+
+<div color="lightblue" align="right">
+
+<a href="http://statisland.com/postups/home.html">HOME</a> | <a href="http://statisland.com/postups/about.html">ABOUT</a> | <a href="http://statisland.com/postups/resume.html">RESUME</a> | <a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | <a href="mailto:ncapofari@yahoo.com">CONTACT</a>
+
+</div>
+
+</br><center>![CapStats](head.png)</br></br></center>
+
+---
+output:
+  html_document:
+    theme: united
+    highlight: tango
+---
+
+```{r setup, echo=F}
+library(knitr)
+library(kableExtra)
+library(rmdformats)
+
+knitr::opts_chunk$set(echo=T)
+```
+
+# Posting Up 538 NBA Predictions
+*November 25, 2018*
+
+[All code can be found here](https://github.com/capstat/postups/tree/master/nba538)
+
+### FiveThirtyEight
+
+[FiveThirtyEight](https://projects.fivethirtyeight.com/2019-nba-predictions/games/) is the best.  From politics to pop culture, Nate Silver and his team do a great job creating interesting articles and visuals using various data science techniques.  
+
+A big part of what FiveThirtyEight does revolves around sports.  A major focus of mine is also sports, specifically the NBA.  [FiveThirtyEight assigns win probabilities to every NBA game during the regular season and playoffs](https://projects.fivethirtyeight.com/2019-nba-predictions/games/).  I have been using the NBA regular season to test my modelling skills.  
+
+Predicting wins for **every** NBA game is difficult.  We all know that the Warriors will win at home when my beloved Knicks go west, but what happens when that same Knicks team hosts the Orlando Magic?  An adequate model for predicting NBA games should be correct 70% of the time.  But even being right 7 out of 10 times is not enough to make money gambling (trust me, I know).  
+
+I used FiveThirtyEight predictions as my baseline comparison when creating my models.  What I noticed during all of my time working with the data is that you can create a pretty basic model to get results that are just as good as what FiveThirtyEight releases.  Creating a successful model that is easy to explain and simple to utilize can be just as difficult as creating a model with 200 features that implements some esoteric algorithm.  [FiveThrityEight does not really create a prediction model](https://fivethirtyeight.com/features/from-the-warriors-to-the-knicks-how-were-predicting-the-2018-19-nba/).  Rather they create rating systems that are used to simulate the NBA season.  Sometimes it is best to just keep things simple.
+
+### The Model
+
+Pythagorean Win Percentage ([Pythagorean Expectation](https://en.wikipedia.org/wiki/Pythagorean_expectation)) is a formula created by sabermatrician Bill James to estimate the win percentage of baseball teams based upon runs scored and runs allowed.  This formula tells you what proportion of games a team "should" win.  Basketball analysts have adapted the formula to the NBA:
+
+$$  Team\ Points^{16.5} \div (Team\ Points^{16.5} + Opponent^{16.5}) $$
+
+The original exponent used for this formula was 14 and then updated to 13.91 to better correlate with the actual team winning percentages.  [The NBA analyst, John Hollinger, uses the exponenet of 16.5](https://en.wikipedia.org/wiki/Pythagorean_expectation#Use_in_basketball), which I have chosen for this post.
+
+To predict which team will win an NBA game, just compare the home team's home Pythagorean Win Percentage with the away team's away Pythagorean Win Percentage.  That's it.  Nothing fancy.  
+
+I have scraped all NBA game results from [basketball-reference.com](https://www.basketball-reference.com/).  You can find the data sets used for this post on [my github page](https://github.com/capstat/postups/tree/master/nba538/data).  Let's take a look at how to implement home and away Pythagorean Win Percentage.  I am going to use the ```r paste("dplyr")``` package to manipulate the data.  This package is part of the [tidyverse](https://dplyr.tidyverse.org/).
+
+```{r data, message=F, comment=F}
+library(dplyr)
+
+#NBA historical data on github
+filename = paste0("https://raw.githubusercontent.com/capstat/",
+                  "postups/master/data/nba_2017.csv")
+#get NBA 2017-2018 data
+#nba = read.csv(filename)
+nba = read.csv("data/nba_2017.csv")
+
+#dplyr pipe %>%
+nba_pyt = nba %>%
+  #just the features we need
+  select("G", "Date", "Home", "Team", "Opponent", 
+         "Result", "Team_Points", "Opp_Points") %>%
+  #group by team and home/away
+  group_by(Team, Home) %>%
+  #calculate data as seaon progresses
+  mutate(
+    #keep a count for home/away games
+    Home_Away_G = cumsum(Result==1 | Result==0),
+    #points at home/away
+    Home_Away_Points = cumsum(Team_Points),
+    #opponent points home/away
+    Home_Away_Opp_Points = cumsum(Opp_Points),
+    #home/away pyt win pct using 16.5
+    Home_Away_Pyt = Home_Away_Points^16.5/
+      (Home_Away_Points^16.5 + Home_Away_Opp_Points^16.5))
+```
+
+We don't want our data set to have repeated entries so we keep only home game observations.  Also, we need the data leading up to a certain game, so we use the ```r "lag"``` function.  Lastly, the Pythagorean Win Percentage can not be calculated for the first home or away game of a season.  We will use ```r NA``` to denote these instances. 
+
+```{r combine}
+#only the home teams
+home = filter(nba_pyt, Home==1)
+#lag the stats
+home$Home_Away_Pyt = lag(home$Home_Away_Pyt)
+#NA for the first home game
+home$Home_Away_Pyt[home$Home_Away_G == 1] = NA
+
+#only the away teams
+away = filter(nba_pyt, Home==0)
+#lag the stats
+away$Home_Away_Pyt = lag(away$Home_Away_Pyt)
+#NA for the first away game
+away$Home_Away_Pyt[away$Home_Away_G == 1] = NA
+
+final = home %>% 
+  #join home team stats with away team stats
+  left_join(away[,c("Team", "Date", "G", "Home_Away_G", "Home_Away_Pyt")], 
+            #key is the date and the team names
+            by = c("Opponent"="Team", "Date"),
+            suffix=c("_HOMETEAM", "_OPP")) %>%
+  #find the difference between the Home/Away pyt win pct
+  mutate(Pyt_Diff = Home_Away_Pyt_HOMETEAM - Home_Away_Pyt_OPP)
+```
+
+```{r table, echo=F, message=F, comment=F}
+x = final
+colnames(x)[1] = "G"
+kable(head(x[,c("Date", "G", "Team", 
+                "Opponent", "Pyt_Diff", "Result")]), "html") %>%
+  kable_styling(full_width = F, position = "left")
+```
+
+### Historical Pythagorean Theorem Predictions
+
+This chart depicts the correct prediction rate for all differences between home and away Pythagorean Win Percentage since the 1983-1984 season.  
+
+```{r threshold, fig.margin=T, echo=F, comment=F, message=F, cache=T}
+library(ggplot2)
+library(ggthemes)
+library(scales)
+
+pyt_hist = read.csv("data/pyt_thm_hist.csv")
+
+ggplot(data=pyt_hist, aes(x=thr, y=prop, group=Season)) +
+  geom_line(size=1, color="lightgrey") + 
+  geom_line(data=pyt_hist[pyt_hist$Season %in% 
+                            c("2014-2015", "2015-2016", "2016-2017"),], 
+             aes(x=thr, y=prop, group=Season, color=Season), size=1) + 
+  theme_few() +
+  theme(legend.position="right") +
+  xlab("Difference in Home/Away Pyt Thm Win %") + 
+  ylab("Correct Prediction Rate") +
+  scale_y_continuous(label=percent)
+```
+
+The last 3 season have seen a drop in the accuracy of relying solely on the difference between the home and away Pythagorean Win Percentages.  The difference that produced the best prediction rate for the 2016-2017 season was approximately 0.05.  Meaning that for the 2016-2017 season, if you chose the home team to win when their home Pythagorean Win Percentage was 0.05 larger than the visiting team's away Pythagorean Win Percentage, and lose if not, you would have been right 63.7% of the time.  This excludes when either team does not have a Pythagorean Win Percentage (first game at home or first game away).
+
+### Predicting the 2017-2018 NBA Season
+
+Below is how you can apply the 0.05 threshold to the 2017-2018 NBA season.  Also, any ```r NA```s are defaulted to a home team win prediction.
+
+```{r predictions}
+#predict home team to win or lose
+final$Prediction = ifelse(
+    #win if home/away pyt win pct diff is greater than the threshold
+    final$Pyt_Diff > 0.05 | #or
+    #if it's the first home game for the team
+    is.na(final$Home_Away_Pyt_HOMETEAM) | #or
+    #if its the first away game for the opponent
+    is.na(final$Home_Away_Pyt_OPP),
+                          "WIN", "LOSE")
+```
+
+```{r table2, echo=F, message=F, comment=F}
+x = final
+colnames(x)[1] = "G"
+kable(head(x[x$Team=="New York Knicks",
+             c("Date", "G", "Team", "Opponent", 
+               "Pyt_Diff", "Result")]), "html") %>%
+  kable_styling(full_width = F, position = "left")
+```
+
+### NBA Prediction Results 2017-2018 Season
+
+```{r table3, echo=F, message=F, comment=F}
+x = data.frame(
+  "Type" = c("538 ELO", "538 CARMELO", "Pyt Win %"),
+  "Rate" = c(0.6618, 0.6642, 0.6366)) 
+kable(x, "html") %>%
+  kable_styling(full_width = F, position = "left")
+```
+
+FiveThirtyEight predictions beat out the Pythagorean Win Percentage model, but not by much.  The Pythagorean Win Percentage model is much easier to implement compared to the FiveThirtyEight models.  Also, as the season progresses, the model becomes more accurate (66.3% correct prediction rate for games in the new year).   
+
+In conclusion, similar results to the FiveThirtyEight NBA predictions can be made using a very basic model.  But in reality, if you really need to know who is going to win an NBA game, just take a look at the point spread!
+
+
+</br>
+
+<div color="lightblue" align="center">
+
+<a href="http://statisland.com/postups/home.html">HOME</a> | <a href="http://statisland.com/postups/about.html">ABOUT</a> | <a href="http://statisland.com/postups/resume.html">RESUME</a> | <a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | <a href="mailto:ncapofari@yahoo.com">CONTACT</a>
+
+</div>
+
+
+
+
+
+
