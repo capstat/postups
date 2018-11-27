@@ -22,7 +22,6 @@ output:
 ```{r setup, echo=F}
 library(knitr)
 library(kableExtra)
-library(rmdformats)
 
 knitr::opts_chunk$set(echo=T)
 ```
