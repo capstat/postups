@@ -2,7 +2,11 @@
 
 <div color="lightblue" align="right">
 
-<a href="http://statisland.com/postups/home.html">HOME</a> | <a href="http://statisland.com/postups/about.html">ABOUT</a> | <a href="http://statisland.com/postups/resume.html">RESUME</a> | <a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | <a href="mailto:ncapofari@yahoo.com">CONTACT</a>
+<a href="http://statisland.com/postups/home.html">HOME</a> | 
+<a href="http://statisland.com/postups/about.html">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.html">RESUME</a> | 
+<a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com">CONTACT</a>
 
 </div>
 
@@ -182,9 +186,13 @@ In conclusion, similar results to the FiveThirtyEight NBA predictions can be mad
 
 </br>
 
-<div color="lightblue" align="center">
+<div color="lightblue" align="right">
 
-<a href="http://statisland.com/postups/home.html">HOME</a> | <a href="http://statisland.com/postups/about.html">ABOUT</a> | <a href="http://statisland.com/postups/resume.html">RESUME</a> | <a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | <a href="mailto:ncapofari@yahoo.com">CONTACT</a>
+<a href="http://statisland.com/postups/home.html">HOME</a> | 
+<a href="http://statisland.com/postups/about.html">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.html">RESUME</a> | 
+<a href="https://github.com/capstat/postups/tree/master/nba538">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com">CONTACT</a>
 
 </div>
 
