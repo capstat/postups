@@ -1,0 +1,220 @@
+</br>
+
+<div color="lightblue" align="right">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
+</br><center>![CapStats](head.png)</br></br></center>
+
+---
+output:
+  html_document:
+    theme: united
+    highlight: tango
+---
+
+```{r setup, echo=F}
+library(knitr)
+library(kableExtra)
+
+knitr::opts_chunk$set(echo=T)
+```
+
+# Scraping New York Times Movie Reviews
+*December 20, 2018*
+
+[All code can be found here](https://github.com/capstat/postups/tree/master/nyt_reviews)
+
+### New York Times Movie Reviews
+
+I love reading movie reviews.  I avidly look forward to the [Friday New York Times](https://www.nytimes.com/reviews/movies) because that is when most of the movie reviews get printed (yes - printed, I still get the physical copy sent to my house on weekends).  Manohla Dargis, A.O. Scott, Stephen Holden, and the rest of the staff do a great job providing succint summaries and insightful critiques of almost every film that is released in the United States.  
+
+To extract the most out of movie criticism, it helps to have a relationship with the critic.  Interestingly, excluding this relationship is a major appeal of using [Rotten Tomatos](https://www.rottentomatoes.com/), the film review aggregation website.  You can simply look at a number to help you decide weather a movie will be worth your time or not.  Reading a review from an unknown source is not as helpful as using Rotten Tomatos, but if you are familiar with the source and have a movie watching history intertwined with that source, it is much easier to discern what the reveiewer is presenting.  
+
+For example, "Roma", Alfonso Cuarón’s Netflix funded film, was recently [reviewed](https://www.nytimes.com/2018/11/20/movies/roma-review.html) by Manhola Dargis.  Dargis says that the movie is "a masterpiece", and no doubt it is.  But I remember reading Dargis' review of Michael Hanekes' ["Amour"](https://www.nytimes.com/2012/12/19/movies/michael-hanekes-amour-with-jean-louis-trintignant.html), another foreign language film that is highly regarded, and based upon Dargis' excellent review, I saw the movie.  I was not disappointed, but I like movies that are more propulsive - a romantic drama about two octogenarians is not for me.  I will most likely skip "Roma" as well since my idea of a masterpiece ("Goodfellas") may not be the same as hers. 
+
+### NYT Movie Review Ratings Blurbs
+
+Anyway, you might think this post is about the sentiment analysis of NYT movie reviews.  While that would be a great post, I was intrigued by something else.  Many of the NYT movie reviews end with a blurb stating the MPAA rating and why the movie received this rating.  These blurbs, which mostly seem innocuous, can sometimes be pretty hilarious.  Here is the rating blurb for ["Amour"](https://www.nytimes.com/2012/12/19/movies/michael-hanekes-amour-with-jean-louis-trintignant.html):
+
+> "Amour" is rated PG-13 (Parents strongly cautioned).  Illness, suffering, death.
+
+While not being that funny, I appreciate the bluff description (but am dismayed by the possible spoiler).  Here is a genuinenly funny rating blurb, for the movie ["A Quiet Place"](https://www.nytimes.com/2018/04/04/movies/a-quiet-place-review-john-krasinski-emily-blunt.html):
+
+> "A Quiet Place" 
+Rated PG-13 for being scary enough to keep your kids quiet for at least a weekend.
+
+or this blurb for ["Loveless"](https://www.nytimes.com/2017/11/30/movies/loveless-review-andrey-zvyagintsev.html):
+
+> Rated R for putting an icy fist around your heart, and squeezing.
+
+### Collecting the Blurbs
+
+I love these blurbs.  Who writes them?  I wanted to create a collection of all these NYT movie review rating blurbs so I could try to find out.  I used the `rvest` package to write a script that extracts some basic movie info and the ratings blurb.  You will need to sign up for a [NYT API key](http://developer.nytimes.com/).  Store this key as an evironment variable `r Sys.setenv(NYTIMES_KEY="YOUR_API_KEY")`.
+
+```{r scrape, comment=F, message=F}
+library(rvest) #to parse webpages
+library(jsonlite) #nyt data is in json format
+library(stringr) #for string manipulation
+library(dplyr) #for datawrangling
+
+NYTIMES_KEY = Sys.getenv("NYTIMES_KEY")
+```
+
+```{r nyt, echo=F}
+NYTIMES_KEY = "27c49449a1764220a4c914a7e3eff2f7"
+```
+
+```{r scrapeplus, comment=F, mesage=F, cache=T}
+year = 2018
+month = 11 #november
+
+#insert in the year and month
+api_link = sprintf("https://api.nytimes.com/svc/archive/v1/%s/%s.json", year, month)
+#api string
+api_key = sprintf("?api-key=%s", NYTIMES_KEY)
+  
+#extraxt the data from the api and create a data frame
+api_df = fromJSON(paste0(api_link, api_key), flatten = TRUE) %>% 
+  data.frame() 
+
+#filter for just movie review articles
+review_links_df = api_df %>%
+  filter(str_detect(response.docs.web_url, "movies"),
+         str_detect(response.docs.web_url, "-?review-?")) 
+```
+
+```{r table, comment=F, mesage=F, echo=F}
+kable(head(review_links_df[,c(1:3)], 3), "html") %>%
+  kable_styling(full_width = T, position = "left")
+```
+
+Using the links from this data frame we can start scraping individual movie reviews.
+
+### Scraping One Blurb
+
+```{r scrapeone, comment=F, mesage=F}
+#link to the movie review - i know this one has a blurb
+review_link = review_links_df$response.docs.web_url[52]
+```
+
+`r review_link`
+
+```{r scrapeonecont, comment=F, mesage=F, cache=T}
+#date
+date = substr(review_link, 25, 34)
+
+#read the link to the movie review
+review_html = read_html(review_link)
+
+#movie info is at bottom of article
+movie_info_html = html_nodes(review_html, '.bottom-of-article') 
+#using html_text() to keep only the text
+title = html_nodes(movie_info_html, 'h4') %>% html_text()
+movie_info = movie_info_html %>% html_nodes("dd") %>% html_text()
+
+#the blurb always appears after the rating at the bottom of the article
+#sometimes it will say rated # for.. 
+#we are going to try to capture all of them
+pattern = "([R|r]ated [G|PG|PG\\-13|R].*).Running"
+#only want the matched group
+blurb = str_match(review_html %>% html_text(), pattern)[,2]
+
+temp = data.frame(
+    url=review_link,
+    date=date,
+    title=title,
+    director=paste0(movie_info[1], collapse="; "), #can be more than one
+    writer=paste0(movie_info[2], collapse="; "),   #so use a ; 
+    stars=paste0(movie_info[3], collapse="; "),    #to separate
+    running_time=movie_info[5],
+    genre=paste0(movie_info[6], collapse="; "),
+    rating=movie_info[4],
+    blurb=substr(blurb, 1, 50), #in case we captured too much
+    stringsAsFactors = FALSE
+)
+```
+
+```{r table2, comment=F, mesage=F, echo=F}
+kable(temp[,c(2:ncol(temp))], "html") %>%
+  kable_styling(full_width = T, position = "left")
+```
+
+### Scraping a Bunch of Blurbs
+
+It is easy to scrape a whole bunch of blurbs.  Just wrap what is above in a function and call it for all of the links that we collected from the API.
+
+```{r scrapemany, comment=F, mesage=F, cache=T}
+ScrapeOneReview = function(link) {
+  # Scrapes some basic information from a NYT movine review.
+  # Args: link: The HTML link of the movie review.
+  # Returns: Date Frame with movie info.
+  date = substr(link, 25, 34)
+  review_html = read_html(link)
+  movie_info_html = html_nodes(review_html, '.bottom-of-article') 
+  title = html_nodes(movie_info_html, 'h4') %>% html_text()
+  movie_info = movie_info_html %>% html_nodes("dd") %>% html_text()
+  pattern = "([R|r]ated [G|PG|PG\\-13|R].*).Running"
+  blurb = str_match(review_html %>% html_text(), pattern)[,2]
+  temp = data.frame(
+    url=link,
+    date=date,
+    title=title,
+    director=paste0(movie_info[1], collapse="; "), #can be more than one
+    writer=paste0(movie_info[2], collapse="; "),   #so use a ; 
+    stars=paste0(movie_info[3], collapse="; "),    #to separate
+    running_time=movie_info[5],
+    genre=paste0(movie_info[6], collapse="; "),
+    rating=movie_info[4],
+    blurb=substr(blurb, 1, 50), #in case we captured too much
+    stringsAsFactors = FALSE
+  )
+  return(temp)
+}
+
+#create an empty data frame
+one_month_reviews = data.frame()
+
+#loop through each movie review link
+for(each in review_links_df$response.docs.web_url){
+  #skip any link that is already there (in case of duplicates)
+  if(each %in% one_month_reviews$url) next
+  #take a random break while scraping
+  Sys.sleep(sample(10,1))
+  temp_movie_review = ScrapeOneReview(each)
+  one_month_reviews = rbind(one_month_reviews, temp_movie_review)
+}
+```
+
+```{r table3, comment=F, mesage=F, echo=F}
+kable(one_month_reviews[,c(2:ncol(one_month_reviews))], "html") %>%
+  kable_styling(full_width = T, position = "left")
+```
+
+### More Stuff
+
+not all have blurb
+
+go back far enough rated r for and very old one
+
+some funnny ones
+xxx
+
+</br>
+
+<div color="lightblue" align="center">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
