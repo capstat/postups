@@ -55,7 +55,7 @@ or this blurb for ["Loveless"](https://www.nytimes.com/2017/11/30/movies/loveles
 
 ### Collecting the Blurbs
 
-I love these blurbs.  Who writes them?  I wanted to create a collection of all these NYT movie review rating blurbs so I could try to find out.  I used the `rvest` package to write a script that extracts some basic movie info and the ratings blurb.  You will need to sign up for a [NYT API key](http://developer.nytimes.com/).  Store this key as an evironment variable `r Sys.setenv(NYTIMES_KEY="YOUR_API_KEY")`.
+I love these blurbs.  Who writes them?  I wanted to create a collection of all these NYT movie review rating blurbs so I could try to find out.  I used the `rvest` package to write a script that extracts some basic movie info and the ratings blurb.  You will need to sign up for a [NYT API key](http://developer.nytimes.com/).  Store this key as an evironment variable `Sys.setenv(NYTIMES_KEY="YOUR_API_KEY")`.
 
 ```{r scrape, comment=F, message=F}
 library(rvest) #to parse webpages
