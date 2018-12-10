@@ -67,7 +67,7 @@ NYTIMES_KEY = Sys.getenv("NYTIMES_KEY")
 ```
 
 ```{r nyt, echo=F}
-NYTIMES_KEY = "27c49449a1764220a4c914a7e3eff2f7"
+NYTIMES_KEY = "YOUR_KEY_GOES_HERE"
 ```
 
 ```{r scrapeplus, comment=F, mesage=F, cache=T}
@@ -143,8 +143,6 @@ temp = data.frame(
 ```{r table2, comment=F, mesage=F, echo=F}
 kable(temp[,c(2:ncol(temp))], "html") %>%
   kable_styling(full_width = T, position = "left")
-reviews_with_blurbs = read.csv("data/reviews_with_blurbs.csv", 
-                               stringsAsFactors = FALSE)
 ```
 
 ### Scraping a Bunch of Blurbs
