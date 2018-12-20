@@ -1,0 +1,49 @@
+---
+title: "`r paste(school, 'Summary')`"
+author: "Your Name Here"
+date: "October 21, 2015"
+output: 
+  pdf_document:
+   latex_engine: xelatex
+mainfont: Arial
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)      #for plotting
+library(ggthemes)     #to use stephen few's theme
+library(scales)       #use the percent function
+library(knitr)        #to create table
+```
+
+#Some Chart
+
+Brief explanation of the chart.
+
+```{r summary, echo=FALSE} 
+#echo=FALSE -> don't show the code
+#use ggplot to create a chart
+p = ggplot(data=temp_school_data, aes(x=School, y=Percent))
+#add the title
+p = p + ggtitle(paste(school, "Percentage of Something"))
+#bar chart
+p = p + geom_col(aes(fill=School), position="dodge")
+#percent on top of bars
+p = p + geom_text(aes(label=percent(round(Percent, 2))), 
+                  size=3, vjust=-0.25, position=position_dodge(0.9))
+#stephen few's theme
+p = p + theme_few()
+#match the pdf font output
+p = p + theme(text=element_text(family="ArialMT"))
+#set the y axis
+p = p + scale_y_continuous(labels=percent, 
+                           limits=c(0, 1), 
+                           breaks=c(0, 0.25, 0.5, 0.75, 1))
+p = p + xlab("") + ylab("")
+p
+```
+
+#Some Table
+
+Brief explanation of the table. Use [kableExtra](https://github.com/haozhu233/kableExtra) to add styling.
+
+`r kable(temp_school_data[,c(1,3)], "latex")`
