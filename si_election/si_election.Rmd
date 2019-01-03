@@ -1,0 +1,258 @@
+</br>
+
+<div color="lightblue" align="right">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
+</br><center>![CapStats](head.png)</br></br></center>
+
+---
+output:
+  html_document:
+    theme: united
+    highlight: tango
+---
+
+```{r setup, warning=F, message=F, echo=F}
+knitr::opts_chunk$set(warning=F, message=F, cache=T, out.width='50%')
+library(knitr)
+library(kableExtra)
+library(ggplot2)     
+library(ggthemes)     
+library(scales)      
+library(knitr)   
+library(rgdal) 
+library(maptools) 
+x = gpclibPermit()
+library(ggplot2)
+```
+
+# 2018 Staten Island Election Results 
+*January 21, 2019*
+
+[All code can be found here](https://github.com/capstat/postups/tree/master/si_election)
+
+### Staten Island
+
+Staten Island is the most conservative of the 5 New York City boroughs.  In 2016, 56% of Staten Islanders voted for Donald Trump (compared to just 37% for all of NYC).  Trump received 82% of possible Staten Island votes during the 2016 Republican Primary.  If Staten Island was it's own city, it would be the 2nd largest conservative city in America.
+
+In 2018, Dan Donovan (R) was seeking reelection for New York's 11th Congressional District.  The 11th district combines all of Staten Island with some parts of southern Brooklyn (mostly Bay Ridge).  Staten Island voters represent 3/4 of all possible congressional votes.  Max Rose, the Democratic challenger did not stand much of a chance.  [fivethirthyeight.com](https://projects.fivethirtyeight.com/2018-midterm-election-forecast/house/new-york/11/) gave Rose a 1 out of 4 chance to win.  On the night of the election, [predictit.org](https://www.predictit.org/) was paying out 3.70\$ for every 1\$ bet on Rose to win.  
+
+Rose ran a smart campaign.  He was able to overcome the fact that he is not a native Staten Islander.  He appealed to conservative voters by brandishing his military service record.  
+
+Max Rose ended up winning the election with 53% of the vote.  In Staten Island, Rose received about half of all possible votes.  Rose's victory may have been the biggest congressional upset in 2018. 
+
+### Plotting Staten Island Election Districts
+
+New York City election district information can be found [here](https://data.cityofnewyork.us/City-Government/Election-Districts/h2n3-98hq).  The shape file is also saved on [github](https://github.com/capstat/postups/tree/master/si_election/data).  Plotting shape files can be intimidating.  This [tutorial](https://github.com/tidyverse/ggplot2/wiki/plotting-polygon-shapefiles) can explain any steps below that are glossed over below.
+
+The `rgdal` library will be used to read the shape file.  The `fortify` function from `ggplot2` creates a data frame using the spatial data.
+
+One thing to note before jumping in, the `maptools` library is dependent upon `gpclib`.  Permission to use `gpclib` must be turned on to use `maptools`.  Use `gpclibPermit()` to turn on the permission.  This [stack overflow](https://stackoverflow.com/questions/30790036/error-istruegpclibpermitstatus-is-not-true) article explains this issue more thoroughly.
+
+```{r plot_si}
+library(rgdal) #readOGR
+library(maptools) 
+library(ggplot2) #fortify
+library(dplyr) #left_join
+
+stat_island = readOGR("data", layer="geo_export", verbose=F)
+stat_island@data$id = row.names(stat_island@data)
+stat_island.points = fortify(stat_island, region="id") 
+stat_island.df = left_join(stat_island.points, stat_island@data, by="id")
+
+ggplot(stat_island.df) + aes(long, lat, group=group) + geom_polygon()
+```
+
+2018 election information can be found [here](http://vote.nyc.ny.us/html/results/results.shtml).  A cleaned up data set can be found on [github](https://github.com/capstat/postups/tree/master/si_election/data).  After joining the Staten Island election results with the election district shape file, the map can be filtered for only election districts in Staten Island.  This is also a good opportunity to change the theme of our plot using the `ggthemes` package. 
+
+```{r join_results}
+library(ggthemes)
+
+results18 = read.csv("data/election_results_2018.csv", stringsAsFactors = FALSE)
+
+#join the election resluts
+stat_island.df = left_join(stat_island.df, results18, by="elect_dist")
+#filter for only districts where votes were recorded
+stat_island.df = filter(stat_island.df, !is.na(TotalVotes))
+
+ggplot(stat_island.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(color="gray", fill="white") +
+  theme_void()
+```
+
+This next step is not mandatory but it helps the visual.  There are three islands in the plot that are uninhabited and should be removed.  [The Staten Island Expressway is also added to show where the traditional North Shore boundary is](http://www.nytimes.com/2003/09/25/nyregion/along-with-population-and-diversity-stress-rises-on-staten-i.html?pagewanted=all).
+
+```{r remove_islands}
+#boxed long and lat of islands
+stat_island.df$island_long = 
+  ifelse(
+    (stat_island.df$long > -74.0558 & stat_island.df$long < -74.0466) |
+      (stat_island.df$long > -74.1625 & stat_island.df$long < -74.1570) , T, F)
+stat_island.df$island_lat = 
+  ifelse(
+    (stat_island.df$lat > 40.5645 & stat_island.df$lat < 40.5807) |
+      (stat_island.df$lat > 40.6411 & stat_island.df$lat < 40.6456) , T, F)
+stat_island.df$island = 
+  ifelse(stat_island.df$island_long & stat_island.df$island_lat, T, F)
+
+#remove anything that is an island (except for staten island)
+stat_island.df = filter(stat_island.df, island!=TRUE)
+
+#staten island expressway coordinates
+si_exp = read.csv("data/si_exp.csv")
+
+ggplot(stat_island.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(color="gray", fill="white") +
+  geom_smooth(data=si_exp, aes(x=long, y=lat, group=NULL), color="yellow", size=3) +
+  theme_void()
+```
+
+### Election Results
+
+The added shading depicts the winner of each district:
+
+```{r shading}
+ggplot(data=stat_island.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(aes(fill=stat_island.df$Winner), color="gray") +
+  scale_fill_manual(values=c("red", "blue")) +
+  geom_smooth(data=si_exp, aes(x=long, y=lat, group=NULL), color="yellow", size=3) +
+  theme_void() +
+  theme(legend.position="right", legend.title=element_blank())
+```
+
+Side by side plot to see where each candidate got their votes:
+
+```{r votes, out.width='80%'}
+donovan = ggplot(data=stat_island.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(aes(fill=stat_island.df$DD), color="gray") +
+  scale_fill_gradient(low="white", high="red") +
+  theme_void() +
+  theme(legend.position="bottom") +
+  labs(fill="Total Votes", title="Dan Donovan Votes")
+
+rose = ggplot(data=stat_island.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(aes(fill=stat_island.df$MR), color="gray") +
+  scale_fill_gradient(low="white", high="blue") +
+  theme_void() +
+  theme(legend.position="bottom") +
+  labs(fill="Total Votes", title="Max Rose Votes")
+
+#use grid.arrange function from the gridExtra library
+gridExtra::grid.arrange(donovan, rose, ncol=2)
+```
+
+Results from the districts where the most total votes were recorded:
+
+```{r most}
+stat_most = filter(stat_island.df, TotalVotes > 550)
+#to differentiate between R and D win diff, D diff * -1
+stat_most$plot_diff = ifelse(stat_most$Winner=="ROSE", 
+                             stat_most$Difference*-1,
+                             stat_most$Difference)
+
+ggplot(data=stat_most) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(data=stat_island.df, fill="white", color="gray") +
+  geom_polygon(aes(fill=plot_diff, color=Winner)) +
+  scale_fill_gradient(low="blue", high="red") +
+  scale_color_manual(values=c("red", "blue")) +
+  theme_void() +
+  theme(legend.position="none") +
+  labs(title="Districts with at least 550 Total Votes Recorded")
+```
+
+### North Shore Districts in the Red
+
+Dan Donovan won 20 districts that are north of the Staten Island Expressway.  Most of these districts are in Westerleigh or Castleton Corners, the two farthest east are in West Brighton.  Donovan received 56% of the vote from these districts (compared to 48% of the votes from all other districts).  These 20 districts make up 8% of all Staten Island votes.  This is where the battleground for the 2020 election will be.  Finding what these voters care most about and addressing it will be imperative for the winner of the next election.
+
+```{r zoom, out.width='50%'}
+#districts to hi-light in on
+red_north = c(61034:61036, 61041:61043, 61045:61048, 
+              63035, 63059, 63062:63067, 63072, 63081)
+
+red_north.df = filter(stat_island.df, elect_dist %in% red_north)
+
+red_north.plot = ggplot(data=red_north.df) + 
+  aes(long, lat, group=group) + 
+  geom_polygon(data=stat_island.df, fill="white", color="gray") +
+  geom_polygon(aes(fill=Difference), color="red") +
+  scale_fill_gradient(low="white", high="red", name="Margin of\nVictory\n", 
+                      breaks=c(.1,.2,.3), labels=c("10%","20%","30%")) +
+  theme_void() +
+  theme(legend.position="right")
+red_north.plot
+```
+
+Taking a closer look:
+
+```{r zoomin, out.width='50%'}
+red_north.plot +
+  coord_cartesian(xlim=c(-74.155, -74.105), ylim=c(40.605, 40.633)) +
+  theme(legend.position="none")
+```
+
+After reading this post from [fivethirtyeight.com](https://fivethirtyeight.com/features/how-red-state-democrats-became-an-endangered-species-in-the-senate/), I wanted to create similar plots using Staten Island voting info.  Thanks a lot to [Ella Koeze](https://fivethirtyeight.com/contributors/ella-koeze/) for creating the original plots.  The originals were created using `QGIS`, I adapted them using `R`.
+
+```{r change, out.width='75%'}
+library(rgeos) #gCentroid function
+
+#results from 2016 and 2018
+results1618 = read.csv("data/results1618.csv")
+
+#find the centroids using the original shapefile
+stat_island$centroid = gCentroid(stat_island, byid=T)
+#create a data frame
+centroids = data.frame(
+  elect_dist=stat_island$elect_dist,
+  centroid.x=stat_island$centroid$x,
+  centroid.y=stat_island$centroid$y
+)
+
+#add election results to centroid df
+centroids.df = centroids %>%
+  #filter for EDs of interest
+  filter(elect_dist %in% red_north) %>%
+  #join the data
+  left_join(results1618, by="elect_dist")
+
+ggplot(centroids.df) + 
+  geom_polygon(data=stat_island.df, aes(long, lat, group=group),
+               fill="white", color="gray95") +
+  geom_polygon(data=red_north.df, aes(long, lat, group=group),
+               fill="white", color="red") +
+  geom_point(aes(x=centroid.x, y=centroid.y, size=Vote.Share.Margin),
+             color="pink") +
+  scale_size_continuous(name="Margin of Victory", 
+                    breaks=c(.1,.2,.3,.4,.5),
+                    labels=c("10%", "20%", "30%", "40%", "50%")) +
+  theme_void() +
+  theme(legend.position="bottom") +
+  coord_cartesian(xlim=c(-74.155, -74.105), ylim=c(40.605, 40.633)) +
+  facet_wrap(~Year, ncol=2)
+```
+
+</br>
+
+<div color="lightblue" align="center">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
+
