@@ -1,0 +1,172 @@
+</br>
+
+<div color="lightblue" align="right">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
+</br><center>![CapStats](head.png)</br></br></center>
+
+---
+output:
+  html_document:
+    theme: united
+    highlight: tango
+---
+
+# Pitchfork 50 Best Albums of the Year 
+*February 6, 2019*
+
+[All code can be found here](https://github.com/capstat/postups/tree/master/pitchfork)
+
+### Pitchfork
+
+[Pitchfork.com](https://pitchfork.com) is a music review website.  Each album that is reviewed on the site is also rated on a scale from 0 to 10.  Pitchfork began in the mid 90s as a review site for new independent music.  It's cultural footprint has increased each year and now Pitchfork hosts over 200,000 visitors on its site each day.  
+
+I love new music.  I read Pitchfork daily to see if there are any new albums that have been relaesed that I would be interested in.  Recently, while looking through some of the available data sets on [Kaggle](https://www.kaggle.com/datasets), I came across a collection of over 18,000 music reviews from Pitchfork.  [Nolan Conway](https://github.com/nolanbconaway) created a scraper and uploaded a database he created to store all of the album review info.  
+
+One of my first projects that I completed for my MS in Data Science was creating a scraper to pull review data from Pitchfork.  Taking a look at how Nolan created his Pitchfork scraper was illuminating.  It is very clear and concise.  I suggest anyone reading this post that is looking for a python web scraping tutorial to go read through [Nolan's code](https://github.com/nolanbconaway/pitchfork-data).  
+
+After taking a look at all of this data, I had an idea.  Pitchfork comes out with a list of the [50 best albums every year](https://pitchfork.com/features/lists-and-guides/the-50-best-albums-of-2018/).  Can the data from the album reviews that are produced throughout the year predict if an album will be included in the year end list?  Can the album review data predict an album's year end ranking on the list?  The first step to finding out is to scrape these lists from Pitchfork and link them to the album review data.  A previous post I created explained how to [scrape webpages using `R`](http://statisland.com/postups/nyt_review.html).  The code in this post is written in `python` utilizing the [`BeautifulSoup`](https://www.crummy.com/software/BeautifulSoup/) library.  After scraping the year end results, I will merge them to the data that Nolan has already provided on Kaggle.  
+
+The first step is to get the web address of each Pitchfork list that is produced each year.  Pitchfork has a webpage that has a link to all of these lists that can be found  [here](https://pitchfork.com/features/lists-and-guides/).  
+
+```python
+from bs4 import BeautifulSoup  #for webscraping
+import requests                #to get the webpage
+import re                      #for regular expression matching
+
+base_url = 'https://pitchfork.com'
+
+#use this page to get the urls for all the best album lists 
+page_name = base_url + '/features/lists-and-guides/'
+#request the page
+page = requests.get(page_name)
+#make the soup
+soup = BeautifulSoup(page.content)
+
+#2017 list added manually #'/features/lists-and-guides/the-50-best-albums-of-2017/' ????? remove or use
+#initialize a list
+lists = []
+
+#get all links for 50 best albums of the year
+#matching for the regular expression -50-
+for link in soup.findAll('a', attrs={'href':re.compile(r'-50-')}):
+    lists.append(link['href'])
+
+#remove duplicates
+lists = list(set(lists))
+
+#print the list
+```
+
+Using the list of links above, Pitchfork's top 50 albums from each year can be can be captured.  To do this, a helper function is created to extract the album titles from these lists.  Each year's list is broken up into 5 webpages (10 albums on each page) with the first webpage listing the #50 to #41 albums.
+
+```python
+def get_album_titles(webpage):
+    """
+    quick helper function to extract album titles from 
+    pitchfork best album of the year lists
+    @webpage is the page where the albums are listed
+    returns a list of album titles
+    """
+    page = requests.get(webpage) #request the page
+    soup = BeautifulSoup(page.content) #make the soup
+    #extract the album titles
+    albums = soup.findAll('h2', {'class' : 'list-blurb__work-title'})
+    #add the album titles to the list
+    return([t.get_text() for t in albums])
+
+#initalize list to store info
+album_title = [] 
+
+#best album link years
+years = range(2013, 2019)
+#for each year
+for year in years:
+    #filter our list of links for the year
+    new_page = base_url + [l for l in lists if str(year) in l][0]
+    #append the album titles on the page using the helper function
+    album_title += get_album_titles(new_page)
+    #pitchfork uses a separate web page for every 10 albums
+    for next_page in range(2, 6):
+        #get the next page
+        next_page = new_page + '?page=%s' % next_page
+        #append the album titles on the page using the helper function
+        album_title += get_album_titles(next_page)
+```
+
+Since this information will be combined with the album review data that has already been scraped, it is helpful to create a `pandas` data frame to store the information.
+
+```python
+import pandas as pd #to create a data frame
+
+#create a one column df using the album titles
+album_df = pd.DataFrame({'album_title' : album_title})
+#add the year and rank for each album
+album_df['year'] = [year for year in years for i in range(50)]
+album_df['rank'] = (list(range(50, 0, -1)) * len(years))
+#save as a csv file
+album_df.to_csv("data/pitchfork_50.csv")
+```
+
+```{r t, echo=F}
+library(knitr)
+p50 = read.csv("data/pitchfork_50.csv")
+kable(head(p50[,c(-1)]))
+```
+
+Now that the best album lists are in a data frame, this data can be joined with the album review data from [Nolan Conway](https://github.com/nolanbconaway/pitchfork-data).  To do follow along with this section, you need to download the `pitchfork.db` file from [here](https://github.com/nolanbconaway/pitchfork-data).
+
+```python
+import sqlite3 #to import data from the data base
+from functools import reduce #help joining data frames
+
+con = sqlite3.connect("data/pitchfork.db")
+#get review data
+reviews = pd.read_sql('SELECT * FROM reviews', con) 
+#get genre, label, content (text of review)
+genres = pd.read_sql('SELECT * FROM genres', con)
+labels = pd.read_sql('SELECT * FROM labels', con)
+content = pd.read_sql('SELECT * FROM content', con)
+con.close()
+
+#get word count from review
+content['word_count'] = content['content'].apply(lambda x: len(x.split()))
+
+#data frames to join
+dfs = [reviews, genres, labels, content]
+#join and create one data frame
+reviews_final = reduce(lambda left, right: pd.merge(left, right, on='reviewid'), dfs)
+#save as a csv file
+reviews_final.to_csv("data/pitchfork_reviews.csv")
+
+#join the top 50 lists with the review data
+#review album titles are all lower case
+album_df['album_title_lower'] = album_df['album_title'].str.lower()
+final_album_df = pd.merge(reviews_final, album_df,  
+                          how='left', 
+                          left_on= ['title', 'pub_year'], 
+                          right_on = ['album_title_lower', 'year'])
+final_album_df.to_csv("data/pitchfork50_with_reviews.csv")
+```
+
+The [next post](http://statisland.com/postups/pitchfork_model.html) will create a model that tries to predict when an album will appear on the year end list, and if so, what will the album's ranking be.
+
+</br>
+
+<div color="lightblue" align="center">
+
+<a href="http://statisland.com/postups/home.html" target="_blank">HOME</a> | 
+<a href="http://statisland.com/postups/about.html" target="_blank">ABOUT</a> | 
+<a href="http://statisland.com/postups/resume.pdf" target="_blank">RESUME</a> | 
+<a href="https://github.com/capstat/postups" target="_blank">GITHUB</a> | 
+<a href="mailto:ncapofari@yahoo.com?subject=POSTUPS">CONTACT</a>
+
+</div>
+
